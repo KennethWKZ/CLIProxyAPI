@@ -337,3 +337,49 @@ func TestSanitizeClaudeMessagesForClaudeUpstream_NormalizesValidThinkingAndDrops
 		t.Fatalf("remaining second role = %q, want user", got)
 	}
 }
+
+func TestSanitizeClaudeMessagesForClaudeUpstream_RepairsSameRoleAdjacencyAfterDrop(t *testing.T) {
+	// A thinking-only assistant turn with no signature is dropped. Without the
+	// repair pass this leaves two adjacent user messages, which upstream
+	// providers reject. A minimal assistant placeholder must be inserted.
+	input := []byte(`{"messages":[{"role":"user","content":[{"type":"text","text":"q1"}]},{"role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":""}]},{"role":"user","content":[{"type":"text","text":"q2"}]}]}`)
+
+	output, report := SanitizeClaudeMessagesForClaudeUpstream(input, "claude-sonnet-4-5")
+	if report.DroppedBlocks != 1 {
+		t.Fatalf("DroppedBlocks = %d, want 1; report=%+v", report.DroppedBlocks, report)
+	}
+	messages := gjson.GetBytes(output, "messages").Array()
+	if len(messages) != 3 {
+		t.Fatalf("messages length = %d, want 3 (placeholder inserted): %s", len(messages), output)
+	}
+	if got := messages[0].Get("role").String(); got != "user" {
+		t.Fatalf("messages[0].role = %q, want user", got)
+	}
+	if got := messages[1].Get("role").String(); got != "assistant" {
+		t.Fatalf("messages[1].role = %q, want assistant placeholder", got)
+	}
+	if got := messages[1].Get("content.0.type").String(); got != "text" {
+		t.Fatalf("messages[1].content[0].type = %q, want text placeholder", got)
+	}
+	if got := messages[2].Get("role").String(); got != "user" {
+		t.Fatalf("messages[2].role = %q, want user", got)
+	}
+}
+
+func TestSanitizeClaudeMessagesForClaudeUpstream_RepairsEmptyMessagesAfterDrop(t *testing.T) {
+	// When every message is dropped, the request must still carry at least one
+	// turn so upstream does not return an empty response.
+	input := []byte(`{"messages":[{"role":"assistant","content":[{"type":"thinking","thinking":"secret","signature":""}]}]}`)
+
+	output, report := SanitizeClaudeMessagesForClaudeUpstream(input, "claude-sonnet-4-5")
+	if report.DroppedBlocks != 1 {
+		t.Fatalf("DroppedBlocks = %d, want 1; report=%+v", report.DroppedBlocks, report)
+	}
+	messages := gjson.GetBytes(output, "messages").Array()
+	if len(messages) != 1 {
+		t.Fatalf("messages length = %d, want 1 (user placeholder): %s", len(messages), output)
+	}
+	if got := messages[0].Get("role").String(); got != "user" {
+		t.Fatalf("messages[0].role = %q, want user placeholder", got)
+	}
+}

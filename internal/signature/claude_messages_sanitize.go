@@ -70,6 +70,7 @@ func SanitizeClaudeMessagesSignaturesForTarget(payload []byte, opts ClaudeMessag
 	messageResults := messages.Array()
 	keptMessages := make([]string, 0, len(messageResults))
 	modified := false
+	droppedMessage := false
 
 	for i, message := range messageResults {
 		content := message.Get("content")
@@ -157,6 +158,7 @@ func SanitizeClaudeMessagesSignaturesForTarget(payload []byte, opts ClaudeMessag
 		if messageModified {
 			modified = true
 			if len(keptParts) == 0 && opts.DropEmptyMessages {
+				droppedMessage = true
 				continue
 			}
 			updated, _ := sjson.SetRaw(message.Raw, "content", "["+strings.Join(keptParts, ",")+"]")
@@ -169,6 +171,9 @@ func SanitizeClaudeMessagesSignaturesForTarget(payload []byte, opts ClaudeMessag
 
 	if !modified {
 		return payload, report
+	}
+	if droppedMessage {
+		keptMessages = repairDroppedMessageAdjacency(keptMessages)
 	}
 	output, _ := sjson.SetRawBytes(payload, "messages", []byte("["+strings.Join(keptMessages, ",")+"]"))
 	return output, report
@@ -266,4 +271,39 @@ func deleteEmptyJSONObjectPath(raw, path string) (string, bool) {
 		return raw, false
 	}
 	return updated, true
+}
+
+// repairDroppedMessageAdjacency restores valid role alternation after a
+// thinking-only assistant turn is removed. Dropping a turn can produce
+// same-role adjacency (for example user followed by user) or an empty message
+// array, both of which make upstream providers reject the request or return an
+// empty response. A minimal placeholder of the opposite role is inserted
+// between adjacent same-role messages; an empty array receives a single user
+// placeholder so the request always carries at least one turn.
+func repairDroppedMessageAdjacency(keptMessages []string) []string {
+	if len(keptMessages) == 0 {
+		return []string{placeholderMessageForRole("user")}
+	}
+	repaired := make([]string, 0, len(keptMessages)+2)
+	var prevRole string
+	for _, raw := range keptMessages {
+		role := gjson.Get(raw, "role").String()
+		if prevRole != "" && role != "" && role == prevRole {
+			repaired = append(repaired, placeholderMessageForRole(oppositeMessageRole(role)))
+		}
+		repaired = append(repaired, raw)
+		prevRole = role
+	}
+	return repaired
+}
+
+func oppositeMessageRole(role string) string {
+	if role == "assistant" {
+		return "user"
+	}
+	return "assistant"
+}
+
+func placeholderMessageForRole(role string) string {
+	return `{"role":"` + role + `","content":[{"type":"text","text":"."}]}`
 }
