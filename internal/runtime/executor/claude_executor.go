@@ -355,7 +355,7 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 	if err != nil {
 		return resp, err
 	}
-	if errHeaders := applyClaudeHeaders(httpReq, auth, apiKey, false, extraBetas, e.cfg, opts.Headers); errHeaders != nil {
+	if errHeaders := applyClaudeHeaders(httpReq, auth, apiKey, stream, extraBetas, e.cfg, opts.Headers); errHeaders != nil {
 		return resp, errHeaders
 	}
 	var authID, authLabel, authType, authValue string
