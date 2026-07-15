@@ -134,6 +134,11 @@ type Config struct {
 	// XAIKey defines xAI API key configurations using the same structure as Codex API keys.
 	XAIKey []XAIKey `yaml:"xai-api-key" json:"xai-api-key"`
 
+	// CodexBaseURL globally overrides the upstream Codex API endpoint for
+	// OAuth/file-backed credentials that do not set their own base URL.
+	// Per-credential base URLs still take precedence.
+	CodexBaseURL string `yaml:"codex-base-url,omitempty" json:"codex-base-url,omitempty"`
+
 	// Codex configures provider-wide Codex request behavior.
 	Codex CodexConfig `yaml:"codex" json:"codex"`
 
@@ -143,6 +148,11 @@ type Config struct {
 
 	// ClaudeKey defines a list of Claude API key configurations as specified in the YAML configuration file.
 	ClaudeKey []ClaudeKey `yaml:"claude-api-key" json:"claude-api-key"`
+
+	// ClaudeBaseURL globally overrides the upstream Claude API endpoint for
+	// OAuth/file-backed credentials that do not set their own base URL.
+	// Per-credential base URLs still take precedence.
+	ClaudeBaseURL string `yaml:"claude-base-url,omitempty" json:"claude-base-url,omitempty"`
 
 	// ClaudeHeaderDefaults configures default header values for Claude API requests.
 	// These are used as fallbacks when the client does not send its own headers.
