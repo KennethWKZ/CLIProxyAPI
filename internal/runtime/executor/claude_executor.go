@@ -784,7 +784,12 @@ func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Aut
 		body = rebuildMidSystemMessagesToTopLevel(body)
 	}
 
-	if !strings.HasPrefix(baseModel, "claude-3-5-haiku") {
+	// Gate the Claude Code system-prompt injection on the same cloak decision the
+	// generation path uses (applyCloaking): genuine Claude Code clients (claude-cli
+	// User-Agent) and the disable-claude-cloak-mode switch skip it. Otherwise the
+	// injected ~1.5k static prompt is counted by upstream count_tokens and inflates
+	// every /context entry by ~2k. See issue #4103.
+	if !strings.HasPrefix(baseModel, "claude-3-5-haiku") && claudeCountShouldCloak(ctx, e.cfg, auth) {
 		body = checkSystemInstructions(body)
 	}
 
@@ -2152,6 +2157,32 @@ IMPORTANT: this context may or may not be relevant to your tasks. You should not
 
 // applyCloaking applies cloaking transformations to the payload based on config and client.
 // Cloaking includes: system prompt injection, fake user ID, and sensitive word obfuscation.
+// claudeCountShouldCloak mirrors applyCloaking's cloak-mode precedence to decide
+// whether the count_tokens path should inject the Claude Code system prompt. Kept
+// in sync with applyCloaking: built-in "auto" -> global claude-cloak-mode default
+// -> disable-claude-cloak-mode "never" -> per-credential attr mode -> per
+// claude-api-key cloak config, then ShouldCloak against the client User-Agent.
+func claudeCountShouldCloak(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth) bool {
+	cloakMode := "auto"
+	if cfg != nil {
+		if globalMode := strings.ToLower(strings.TrimSpace(cfg.ClaudeCloakMode)); globalMode != "" {
+			cloakMode = globalMode
+		}
+		if cfg.DisableClaudeCloakMode {
+			cloakMode = "never"
+		}
+	}
+	if attrMode, _, _, _ := getCloakConfigFromAuth(auth); attrMode != "" {
+		cloakMode = attrMode
+	}
+	if cloakCfg := resolveClaudeKeyCloakConfig(cfg, auth); cloakCfg != nil {
+		if mode := strings.TrimSpace(cloakCfg.Mode); mode != "" {
+			cloakMode = mode
+		}
+	}
+	return helps.ShouldCloak(cloakMode, getClientUserAgent(ctx))
+}
+
 func applyCloaking(ctx context.Context, cfg *config.Config, auth *cliproxyauth.Auth, payload []byte, model string, apiKey string) ([]byte, error) {
 	clientUserAgent := getClientUserAgent(ctx)
 	// Enable cch signing for OAuth tokens by default (not just experimental flag).
