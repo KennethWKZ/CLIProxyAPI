@@ -472,6 +472,7 @@ func (h *Host) buildAuthsFromFileData(ctx context.Context, path string, data []b
 		return nil, fmt.Errorf("invalid auth weight: %w", errWeight)
 	}
 	coreauth.ApplyAuthPriorityMetadata(auth, metadata)
+	coreauth.ApplyBaseURLFromMetadata(auth)
 	coreauth.ApplyCustomHeadersFromMetadata(auth)
 	return []*coreauth.Auth{auth}, nil
 }

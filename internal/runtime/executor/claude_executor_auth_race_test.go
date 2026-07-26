@@ -87,6 +87,7 @@ func TestClaudeExecutorSharedCredentialMetadataReadersUseOneLock(t *testing.T) {
 			}
 			if i%3 == 1 {
 				_, _ = claudeCreds(auth)
+				_, _ = claudeCredsWithConfig(&config.Config{ClaudeBaseURL: "http://127.0.0.1:18081"}, auth)
 				return
 			}
 			_, _, _, _ = getCloakConfigFromAuth(auth)
