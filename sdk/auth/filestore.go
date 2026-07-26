@@ -298,6 +298,7 @@ func (s *FileTokenStore) readAuthFiles(path, baseDir string) ([]*cliproxyauth.Au
 				if errWeight := cliproxyauth.ApplyAuthWeightMetadata(auth, metadata); errWeight != nil {
 					return nil, errWeight
 				}
+				cliproxyauth.ApplyBaseURLFromMetadata(auth)
 				cliproxyauth.ApplyAuthPriorityMetadata(auth, metadata)
 				if _, inherited := auth.Attributes[cliproxyauth.AttributeFilePriority]; inherited {
 					if setter, ok := auth.Storage.(interface{ SetMetadata(map[string]any) }); ok {
@@ -357,6 +358,7 @@ func (s *FileTokenStore) readAuthFiles(path, baseDir string) ([]*cliproxyauth.Au
 	if email, ok := metadata["email"].(string); ok && email != "" {
 		auth.Attributes["email"] = email
 	}
+	cliproxyauth.ApplyBaseURLFromMetadata(auth)
 	cliproxyauth.ApplyCustomHeadersFromMetadata(auth)
 	return []*cliproxyauth.Auth{auth}, nil
 }
