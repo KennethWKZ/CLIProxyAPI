@@ -24,7 +24,7 @@ func (e *ClaudeExecutor) Execute(ctx context.Context, auth *cliproxyauth.Auth, r
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
 	upstreamModel := e.upstreamModel(baseModel)
 
-	apiKey, baseURL := claudeCreds(auth)
+	apiKey, baseURL := claudeCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}

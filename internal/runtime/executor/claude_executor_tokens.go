@@ -20,7 +20,7 @@ import (
 )
 
 func (e *ClaudeExecutor) CountTokens(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (cliproxyexecutor.Response, error) {
-	apiKey, baseURL := claudeCreds(auth)
+	apiKey, baseURL := claudeCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}
@@ -130,7 +130,7 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
 	upstreamModel := e.upstreamModel(baseModel)
 
-	apiKey, baseURL := claudeCreds(auth)
+	apiKey, baseURL := claudeCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}

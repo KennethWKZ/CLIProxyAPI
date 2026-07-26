@@ -860,6 +860,12 @@ oauth:
   # Authentication directory (supports ~ for home directory)
   auth-dir: "~/.cli-proxy-api"
 
+  # OAuth auth files may optionally include base_url or base-url to override the
+  # upstream endpoint for that account only. This is useful for routing one OAuth
+  # account through a local gateway while leaving other accounts on the default
+  # provider endpoint. Example auth file field:
+  #   "base_url": "http://127.0.0.1:18081"
+
   # Core auth auto-refresh and manual refresh-all worker pool size (OAuth/file-based auth token refresh).
   # When > 0, overrides the default worker count (16).
   # auth-auto-refresh-workers: 16
