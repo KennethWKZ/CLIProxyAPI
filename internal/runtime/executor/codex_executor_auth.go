@@ -480,15 +480,21 @@ func (e *CodexExecutor) refreshLocked(ctx context.Context, auth *cliproxyauth.Au
 }
 
 func codexCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
-	return codexCredsForRequest(context.Background(), a)
+	return codexCredsWithConfig(context.Background(), nil, a)
 }
 
-func codexCredsForRequest(ctx context.Context, a *cliproxyauth.Auth, clientHeaders ...http.Header) (apiKey, baseURL string) {
+// codexCredsWithConfig resolves the Codex credential and its upstream base URL.
+// Base URL precedence (high -> low): auth attributes, per-auth metadata (OAuth
+// only), then the global codex-base-url config (OAuth only). A SIWC request keeps
+// its own default endpoint and never inherits the OAuth overrides. The OAuth
+// classification stays on attributes plus the resolved token so this never calls
+// Auth.AuthKind, which reads Auth.Metadata outside the credential lock.
+func codexCredsWithConfig(ctx context.Context, cfg *config.Config, a *cliproxyauth.Auth, clientHeaders ...http.Header) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
 	if a.Attributes != nil {
-		baseURL = a.Attributes["base_url"]
+		baseURL = strings.TrimSpace(a.Attributes["base_url"])
 	}
 	if codexUseSIWCForRequest(ctx, a, clientHeaders...) {
 		apiKey = codexSIWCAccessToken(a)
@@ -505,7 +511,35 @@ func codexCredsForRequest(ctx context.Context, a *cliproxyauth.Auth, clientHeade
 			apiKey = v
 		}
 	}
-	return
+	if baseURL == "" && codexAuthInheritsBaseURL(a, apiKey) {
+		baseURL = cliproxyauth.BaseURLFromMetadata(a.Metadata)
+		if baseURL == "" && cfg != nil {
+			baseURL = cfg.CodexBaseURL
+		}
+	}
+	return apiKey, normalizeCodexBaseURL(baseURL)
+}
+
+// codexAuthInheritsBaseURL reports whether the credential is an OAuth login,
+// the only kind that may inherit a base URL from metadata or global config. A
+// configured API key that set no base-url intentionally targets the default
+// endpoint and must never be redirected by a global setting.
+func codexAuthInheritsBaseURL(a *cliproxyauth.Auth, resolvedAPIKey string) bool {
+	switch cliproxyauth.AuthKindFromAttributes(a) {
+	case cliproxyauth.AuthKindOAuth:
+		return true
+	case cliproxyauth.AuthKindAPIKey:
+		return false
+	}
+	// No attribute verdict: the credential is OAuth exactly when its token came
+	// from metadata rather than from a configured api_key attribute.
+	return strings.TrimSpace(resolvedAPIKey) != ""
+}
+
+// normalizeCodexBaseURL trims surrounding whitespace and any trailing slash so
+// configured and resolved base URLs compare equal and never produce "//" paths.
+func normalizeCodexBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
 }
 
 func (e *CodexExecutor) resolveCodexConfig(auth *cliproxyauth.Auth) *config.CodexKey {
@@ -522,11 +556,11 @@ func resolveCodexKeyConfig(cfg *config.Config, auth *cliproxyauth.Auth) *config.
 	var attrKey, attrBase string
 	if auth.Attributes != nil {
 		attrKey = strings.TrimSpace(auth.Attributes["api_key"])
-		attrBase = strings.TrimSpace(auth.Attributes["base_url"])
+		attrBase = normalizeCodexBaseURL(auth.Attributes["base_url"])
 		if index, errIndex := strconv.Atoi(strings.TrimSpace(auth.Attributes[cliproxyauth.AttributeConfigIndex])); errIndex == nil && index >= 0 && index < len(cfg.CodexKey) {
 			entry := &cfg.CodexKey[index]
 			cfgKey := strings.TrimSpace(entry.APIKey)
-			cfgBase := strings.TrimSpace(entry.BaseURL)
+			cfgBase := normalizeCodexBaseURL(entry.BaseURL)
 			if (attrKey == "" || strings.EqualFold(cfgKey, attrKey)) && (attrBase == "" || strings.EqualFold(cfgBase, attrBase)) {
 				return entry
 			}
@@ -535,7 +569,7 @@ func resolveCodexKeyConfig(cfg *config.Config, auth *cliproxyauth.Auth) *config.
 	for i := range cfg.CodexKey {
 		entry := &cfg.CodexKey[i]
 		cfgKey := strings.TrimSpace(entry.APIKey)
-		cfgBase := strings.TrimSpace(entry.BaseURL)
+		cfgBase := normalizeCodexBaseURL(entry.BaseURL)
 		if attrKey != "" && attrBase != "" {
 			if strings.EqualFold(cfgKey, attrKey) && strings.EqualFold(cfgBase, attrBase) {
 				return entry

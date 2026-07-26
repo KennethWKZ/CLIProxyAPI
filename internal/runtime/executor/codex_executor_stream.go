@@ -30,7 +30,7 @@ func (e *CodexExecutor) ExecuteStream(ctx context.Context, auth *cliproxyauth.Au
 	}
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
 
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if errSIWC := ensureCodexSIWCCredentialsForRequest(ctx, auth, apiKey, opts.Headers); errSIWC != nil {
 		return nil, errSIWC
 	}

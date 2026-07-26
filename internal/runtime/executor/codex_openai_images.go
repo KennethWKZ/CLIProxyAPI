@@ -85,7 +85,7 @@ func (e *CodexExecutor) resolveGPTImage2BaseModel() string {
 }
 
 func (e *CodexExecutor) executeOpenAIImage(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (resp cliproxyexecutor.Response, err error) {
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if errSIWC := ensureCodexSIWCCredentialsForRequest(ctx, auth, apiKey, opts.Headers); errSIWC != nil {
 		return resp, errSIWC
 	}
@@ -192,7 +192,7 @@ func (e *CodexExecutor) executeOpenAIImage(ctx context.Context, auth *cliproxyau
 }
 
 func (e *CodexExecutor) executeOpenAIImageStream(ctx context.Context, auth *cliproxyauth.Auth, req cliproxyexecutor.Request, opts cliproxyexecutor.Options) (_ *cliproxyexecutor.StreamResult, err error) {
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if errSIWC := ensureCodexSIWCCredentialsForRequest(ctx, auth, apiKey, opts.Headers); errSIWC != nil {
 		return nil, errSIWC
 	}
@@ -344,7 +344,7 @@ func (e *CodexExecutor) executeDirectOpenAIImage(ctx context.Context, auth *clip
 		return resp, errPrepare
 	}
 
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}
@@ -416,7 +416,7 @@ func (e *CodexExecutor) executeDirectOpenAIImageStream(ctx context.Context, auth
 		return nil, errPrepare
 	}
 
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}

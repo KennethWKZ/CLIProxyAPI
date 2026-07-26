@@ -27,7 +27,7 @@ func (e *CodexWebsocketsExecutor) Execute(ctx context.Context, auth *cliproxyaut
 	}
 
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if errSIWC := ensureCodexSIWCCredentialsForRequest(ctx, auth, apiKey, opts.Headers); errSIWC != nil {
 		return resp, errSIWC
 	}
