@@ -63,7 +63,7 @@ func (e *CodexExecutor) PrepareRequest(req *http.Request, auth *cliproxyauth.Aut
 	if req == nil {
 		return nil
 	}
-	apiKey, _ := codexCredsForRequest(req.Context(), auth, req.Header)
+	apiKey, _ := codexCredsWithConfig(req.Context(), e.cfg, auth, req.Header)
 	if codexUseSIWCForRequest(req.Context(), auth, req.Header) && req.URL != nil && req.URL.Scheme == "https" &&
 		req.URL.Host == "chatgpt.com" && req.URL.Path == "/backend-api/codex/alpha/search" {
 		// ChatGPT Alpha Search requires the original OAuth partition, not SIWC.
