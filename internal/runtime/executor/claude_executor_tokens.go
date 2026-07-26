@@ -121,7 +121,7 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
 	baseModel := thinking.ParseSuffix(req.Model).ModelName
 	upstreamModel := e.upstreamModel(baseModel)
 
-	apiKey, baseURL := claudeCreds(auth)
+	apiKey, baseURL := claudeCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://api.anthropic.com"
 	}

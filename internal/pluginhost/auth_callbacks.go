@@ -355,6 +355,7 @@ func (h *Host) buildAuthFromFileData(path string, data []byte) (*coreauth.Auth, 
 	if errWeight := coreauth.ValidateAuthWeight(auth); errWeight != nil {
 		return nil, fmt.Errorf("invalid auth weight: %w", errWeight)
 	}
+	coreauth.ApplyBaseURLFromMetadata(auth)
 	coreauth.ApplyCustomHeadersFromMetadata(auth)
 	return auth, nil
 }

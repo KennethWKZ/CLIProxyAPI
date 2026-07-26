@@ -1183,12 +1183,28 @@ func applyClaudeWireHeaderCasing(r *http.Request) {
 }
 
 func claudeCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
+	return claudeCredsWithConfig(nil, a)
+}
+
+// claudeCredsWithConfig resolves the Claude credential and its upstream base URL.
+// Base URL precedence (high -> low): auth attributes, per-auth metadata (OAuth
+// only), then the global claude-base-url config (OAuth only).
+func claudeCredsWithConfig(cfg *config.Config, a *cliproxyauth.Auth) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
 	if a.Attributes != nil {
 		apiKey = a.Attributes["api_key"]
-		baseURL = a.Attributes["base_url"]
+		baseURL = strings.TrimSpace(a.Attributes["base_url"])
+	}
+	if baseURL == "" && a.AuthKind() == cliproxyauth.AuthKindOAuth && a.Metadata != nil {
+		baseURL = cliproxyauth.BaseURLFromMetadata(a.Metadata)
+	}
+	if baseURL == "" && a.AuthKind() == cliproxyauth.AuthKindOAuth && cfg != nil {
+		baseURL = strings.TrimSpace(cfg.ClaudeBaseURL)
+	}
+	if baseURL != "" {
+		baseURL = normalizeClaudeBaseURL(baseURL)
 	}
 	if apiKey == "" {
 		apiKey = claudeauth.ReadMetadataString(&a.Metadata, "access_token")

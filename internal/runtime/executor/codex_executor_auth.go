@@ -55,12 +55,25 @@ func (e *CodexExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*
 }
 
 func codexCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
+	return codexCredsWithConfig(nil, a)
+}
+
+// codexCredsWithConfig resolves the Codex credential and its upstream base URL.
+// Base URL precedence (high -> low): auth attributes, per-auth metadata (OAuth
+// only), then the global codex-base-url config (OAuth only).
+func codexCredsWithConfig(cfg *config.Config, a *cliproxyauth.Auth) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
 	if a.Attributes != nil {
 		apiKey = a.Attributes["api_key"]
-		baseURL = a.Attributes["base_url"]
+		baseURL = strings.TrimSpace(a.Attributes["base_url"])
+	}
+	if baseURL == "" && a.AuthKind() == cliproxyauth.AuthKindOAuth && a.Metadata != nil {
+		baseURL = cliproxyauth.BaseURLFromMetadata(a.Metadata)
+	}
+	if baseURL == "" && a.AuthKind() == cliproxyauth.AuthKindOAuth && cfg != nil {
+		baseURL = strings.TrimSpace(cfg.CodexBaseURL)
 	}
 	if apiKey == "" && a.Metadata != nil {
 		if v, ok := a.Metadata["access_token"].(string); ok {
