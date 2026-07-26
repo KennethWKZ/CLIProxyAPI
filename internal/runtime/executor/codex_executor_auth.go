@@ -55,19 +55,56 @@ func (e *CodexExecutor) Refresh(ctx context.Context, auth *cliproxyauth.Auth) (*
 }
 
 func codexCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
+	return codexCredsWithConfig(nil, a)
+}
+
+// codexCredsWithConfig resolves the Codex credential and its upstream base URL.
+// Base URL precedence (high -> low): auth attributes, per-auth metadata (OAuth
+// only), then the global codex-base-url config (OAuth only). The OAuth
+// classification stays on attributes plus the resolved token so this never calls
+// Auth.AuthKind, which reads Auth.Metadata outside the credential lock.
+func codexCredsWithConfig(cfg *config.Config, a *cliproxyauth.Auth) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
 	if a.Attributes != nil {
 		apiKey = a.Attributes["api_key"]
-		baseURL = a.Attributes["base_url"]
+		baseURL = strings.TrimSpace(a.Attributes["base_url"])
 	}
 	if apiKey == "" && a.Metadata != nil {
 		if v, ok := a.Metadata["access_token"].(string); ok {
 			apiKey = v
 		}
 	}
-	return
+	if baseURL == "" && codexAuthInheritsBaseURL(a, apiKey) {
+		baseURL = cliproxyauth.BaseURLFromMetadata(a.Metadata)
+		if baseURL == "" && cfg != nil {
+			baseURL = cfg.CodexBaseURL
+		}
+	}
+	return apiKey, normalizeCodexBaseURL(baseURL)
+}
+
+// codexAuthInheritsBaseURL reports whether the credential is an OAuth login,
+// the only kind that may inherit a base URL from metadata or global config. A
+// configured API key that set no base-url intentionally targets the default
+// endpoint and must never be redirected by a global setting.
+func codexAuthInheritsBaseURL(a *cliproxyauth.Auth, resolvedAPIKey string) bool {
+	switch cliproxyauth.AuthKindFromAttributes(a) {
+	case cliproxyauth.AuthKindOAuth:
+		return true
+	case cliproxyauth.AuthKindAPIKey:
+		return false
+	}
+	// No attribute verdict: the credential is OAuth exactly when its token came
+	// from metadata rather than from a configured api_key attribute.
+	return strings.TrimSpace(resolvedAPIKey) != ""
+}
+
+// normalizeCodexBaseURL trims surrounding whitespace and any trailing slash so
+// configured and resolved base URLs compare equal and never produce "//" paths.
+func normalizeCodexBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
 }
 
 func (e *CodexExecutor) resolveCodexConfig(auth *cliproxyauth.Auth) *config.CodexKey {
@@ -77,12 +114,12 @@ func (e *CodexExecutor) resolveCodexConfig(auth *cliproxyauth.Auth) *config.Code
 	var attrKey, attrBase string
 	if auth.Attributes != nil {
 		attrKey = strings.TrimSpace(auth.Attributes["api_key"])
-		attrBase = strings.TrimSpace(auth.Attributes["base_url"])
+		attrBase = normalizeCodexBaseURL(auth.Attributes["base_url"])
 	}
 	for i := range e.cfg.CodexKey {
 		entry := &e.cfg.CodexKey[i]
 		cfgKey := strings.TrimSpace(entry.APIKey)
-		cfgBase := strings.TrimSpace(entry.BaseURL)
+		cfgBase := normalizeCodexBaseURL(entry.BaseURL)
 		if attrKey != "" && attrBase != "" {
 			if strings.EqualFold(cfgKey, attrKey) && strings.EqualFold(cfgBase, attrBase) {
 				return entry

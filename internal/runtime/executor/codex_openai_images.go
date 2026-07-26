@@ -94,7 +94,7 @@ func (e *CodexExecutor) executeOpenAIImage(ctx context.Context, auth *cliproxyau
 		return resp, errPrepare
 	}
 
-	apiKey, baseURL := codexCreds(auth)
+	apiKey, baseURL := codexCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}
@@ -191,7 +191,7 @@ func (e *CodexExecutor) executeOpenAIImageStream(ctx context.Context, auth *clip
 		return nil, errPrepare
 	}
 
-	apiKey, baseURL := codexCreds(auth)
+	apiKey, baseURL := codexCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}
@@ -324,7 +324,7 @@ func (e *CodexExecutor) executeDirectOpenAIImage(ctx context.Context, auth *clip
 		return resp, errPrepare
 	}
 
-	apiKey, baseURL := codexCreds(auth)
+	apiKey, baseURL := codexCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}
@@ -385,7 +385,7 @@ func (e *CodexExecutor) executeDirectOpenAIImageStream(ctx context.Context, auth
 		return nil, errPrepare
 	}
 
-	apiKey, baseURL := codexCreds(auth)
+	apiKey, baseURL := codexCredsWithConfig(e.cfg, auth)
 	if baseURL == "" {
 		baseURL = "https://chatgpt.com/backend-api/codex"
 	}
