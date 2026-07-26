@@ -1290,17 +1290,63 @@ func applyClaudeWireHeaderCasing(r *http.Request) {
 }
 
 func claudeCreds(a *cliproxyauth.Auth) (apiKey, baseURL string) {
+	return claudeCredsWithConfig(nil, a)
+}
+
+// claudeCredsWithConfig resolves the Claude credential and its upstream base URL.
+// Base URL precedence (high -> low): auth attributes, per-auth metadata (OAuth
+// only), then the global claude-base-url config (OAuth only).
+//
+// Metadata is read through the shared credential metadata lock and the OAuth
+// classification stays on attributes plus the resolved token, so this never
+// calls Auth.AuthKind: that reads Auth.Metadata outside the lock and races the
+// refresh/profile writers that mutate the same map on the request path.
+func claudeCredsWithConfig(cfg *config.Config, a *cliproxyauth.Auth) (apiKey, baseURL string) {
 	if a == nil {
 		return "", ""
 	}
 	if a.Attributes != nil {
 		apiKey = a.Attributes["api_key"]
-		baseURL = a.Attributes["base_url"]
+		baseURL = strings.TrimSpace(a.Attributes["base_url"])
 	}
 	if apiKey == "" {
 		apiKey = claudeauth.ReadMetadataString(&a.Metadata, "access_token")
 	}
-	return
+	if baseURL == "" && claudeAuthInheritsBaseURL(a, apiKey) {
+		baseURL = claudeMetadataBaseURL(a)
+		if baseURL == "" && cfg != nil {
+			baseURL = cfg.ClaudeBaseURL
+		}
+	}
+	return apiKey, normalizeClaudeBaseURL(baseURL)
+}
+
+// claudeAuthInheritsBaseURL reports whether the credential is an OAuth login,
+// the only kind that may inherit a base URL from metadata or global config. A
+// configured API key that set no base-url intentionally targets Anthropic and
+// must never be redirected by a global setting.
+func claudeAuthInheritsBaseURL(a *cliproxyauth.Auth, resolvedAPIKey string) bool {
+	switch cliproxyauth.AuthKindFromAttributes(a) {
+	case cliproxyauth.AuthKindOAuth:
+		return true
+	case cliproxyauth.AuthKindAPIKey:
+		return false
+	}
+	// No attribute verdict: the credential is OAuth exactly when its token came
+	// from metadata rather than from a configured api_key attribute.
+	return strings.TrimSpace(resolvedAPIKey) != ""
+}
+
+// claudeMetadataBaseURL reads the per-auth upstream base URL under the shared
+// credential metadata lock. Both base_url and base-url are accepted to match
+// config naming conventions.
+func claudeMetadataBaseURL(a *cliproxyauth.Auth) string {
+	for _, key := range []string{"base_url", "base-url"} {
+		if value := strings.TrimSpace(claudeauth.ReadMetadataString(&a.Metadata, key)); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // claudePayloadHasMidSystemMessage reports whether the caller placed a
