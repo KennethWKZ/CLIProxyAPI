@@ -223,6 +223,7 @@ func (e *ClaudeExecutor) countTokensUpstream(ctx context.Context, auth *cliproxy
 	body = sanitizeClaudeMessagesForClaudeUpstreamWithDebug(ctx, body, baseModel, helps.APIKeyModelIsCompat(req))
 	body = applyClaudePreservedThinkingBinding(body)
 	body = stripPromptCacheOptions(body)
+	body = relaxForcedToolChoiceForModel(body)
 	// Two different reasons converge on the same deletions, and they must stay
 	// separable.
 	//
