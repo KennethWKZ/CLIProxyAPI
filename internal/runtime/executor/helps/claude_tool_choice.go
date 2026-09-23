@@ -8,7 +8,8 @@ import (
 	"github.com/tidwall/sjson"
 )
 
-// NormalizeClaudeToolChoice downgrades forced tool use on Claude 5.5 to auto.
+// NormalizeClaudeToolChoice downgrades forced tool use on Claude 5.5 and
+// Fable 5.1 to auto.
 // Use the routed upstream model, not the payload model, and run before thinking
 // preparation so forced-mode cleanup cannot discard thinking or signed history.
 // Delegated providers keep their own tool-choice contract. User payload rules
@@ -18,7 +19,7 @@ func NormalizeClaudeToolChoice(provider, model string, payload []byte) []byte {
 		return payload
 	}
 	model = strings.ToLower(thinking.ParseSuffix(strings.TrimSpace(model)).ModelName)
-	if !claude55Model.MatchString(model) {
+	if !claude55Model.MatchString(model) && !strings.HasPrefix(model, "claude-fable-5-1") {
 		return payload
 	}
 	switch gjson.GetBytes(payload, "tool_choice.type").String() {
