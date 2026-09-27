@@ -124,6 +124,7 @@ func tryRefreshModels(ctx context.Context, label string) {
 		log.Warnf("%s: fetch failed from all URLs, keeping current data", label)
 		return
 	}
+	applyModelCatalogOverrides(parsed)
 
 	if len(parsed.Meta) == 0 && oldData != nil && len(oldData.Meta) > 0 {
 		parsed.Meta = oldData.Meta
@@ -324,6 +325,7 @@ func loadModelsFromBytes(data []byte, source string) error {
 	if err := validateModelsCatalog(&parsed); err != nil {
 		return fmt.Errorf("%s: validate models catalog: %w", source, err)
 	}
+	applyModelCatalogOverrides(&parsed)
 
 	modelsCatalogStore.mu.Lock()
 	modelsCatalogStore.data = &parsed
