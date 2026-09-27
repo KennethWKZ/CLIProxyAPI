@@ -369,6 +369,12 @@ upstream:
     model-level-cooling: false
 
   claude:
+    # Provider-wide upstream base URL override for Claude OAuth/file-backed credentials.
+    # Unlike the other shared options here, this applies to OAuth only: per-auth-file
+    # base_url/base-url values take precedence and API-key credentials keep their group
+    # base-url. Empty keeps the official upstream default.
+    # base-url: "http://127.0.0.1:18081"
+
     # When true, scope quota cooldowns to the requested model rather than cooling down
     # the entire credential across all sibling models. Default is false.
     model-level-cooling: false
@@ -994,6 +1000,11 @@ oauth:
 
     # Codex provider behavior.
     codex:
+      # Provider-wide upstream base URL override for Codex OAuth/file-backed credentials.
+      # Per-auth-file base_url/base-url values take precedence. API-key credentials are
+      # unaffected. Empty keeps the official upstream default.
+      # base-url: "http://127.0.0.1:18082"
+
       # Terminate and relay Codex Live WebRTC audio and DataChannel traffic in this process.
       # This requires inbound UDP reachability. Keep disabled to preserve direct media behavior.
       live-media-relay:
