@@ -20,6 +20,7 @@ func TestCodexV8HistoricalCloakingAliasAffectsBothAuthKinds(t *testing.T) {
 	}{
 		{"legacy global", "codex: {disable-codex-cloaking: true}\n", "", true},
 		{"historical alias", "oauth: {providers: {codex: {disable-codex-cloaking: true}}}\n", "", true},
+		{"upstream path", "upstream: {codex: {disable-codex-cloaking: true}}\n", "", true},
 		{"explicit key override", "oauth: {providers: {codex: {disable-codex-cloaking: true}}}\n", ", disable-codex-cloaking: false", false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
