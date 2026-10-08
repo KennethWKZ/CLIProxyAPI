@@ -66,6 +66,18 @@ func TestRelaxForcedToolChoiceForModel(t *testing.T) {
 			wantName: "get_weather",
 		},
 		{
+			// Haiku 5.5 accepts forced tool use; only the response skips thinking.
+			name:     "haiku-5-5 keeps forced any",
+			body:     `{"model":"claude-haiku-5-5","tool_choice":{"type":"any"}}`,
+			wantType: "any",
+		},
+		{
+			name:     "haiku-5-5 1m variant keeps forced tool",
+			body:     `{"model":"claude-haiku-5-5[1m]","tool_choice":{"type":"tool","name":"get_weather"}}`,
+			wantType: "tool",
+			wantName: "get_weather",
+		},
+		{
 			name:     "opus-5-5 none untouched",
 			body:     `{"model":"claude-opus-5-5","tool_choice":{"type":"none"}}`,
 			wantType: "none",

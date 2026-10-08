@@ -29,7 +29,7 @@ func regressedRemoteCatalog(t *testing.T) []byte {
 			continue
 		}
 		switch model["id"] {
-		case "claude-opus-5-5", "claude-sonnet-5-5":
+		case "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5":
 			thinking["zero_allowed"] = true
 		case "claude-fable-5", "claude-fable-5-1":
 			thinking["min"] = 1024
@@ -69,7 +69,7 @@ func assertPinnedClaudeThinking(t *testing.T, models []*ModelInfo) {
 		if th.ZeroAllowed {
 			t.Errorf("%s: zero_allowed = true, want false", model.ID)
 		}
-		if model.ID == "claude-opus-5-5" || model.ID == "claude-sonnet-5-5" {
+		if model.ID == "claude-opus-5-5" || model.ID == "claude-sonnet-5-5" || model.ID == "claude-haiku-5-5" {
 			continue
 		}
 		if th.Min != 0 || th.Max != 0 {
