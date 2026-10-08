@@ -18,6 +18,10 @@ var claudeThinkingOverrides = map[string]func(*ThinkingSupport){
 	// thinking.type="disabled" returns 400.
 	"claude-opus-5-5":   disallowThinkingDisable,
 	"claude-sonnet-5-5": disallowThinkingDisable,
+	// thinking.type="disabled" returns 400 at effort xhigh and max, and Claude
+	// Code 2.1.294 treats the model as rejects_disabled_thinking. A no-thinking
+	// request gets the lowest adaptive effort instead.
+	"claude-haiku-5-5": disallowThinkingDisable,
 	// Adaptive only: budget_tokens and thinking.type="disabled" both return 400.
 	"claude-fable-5":   makeThinkingLevelOnly,
 	"claude-fable-5-1": makeThinkingLevelOnly,
