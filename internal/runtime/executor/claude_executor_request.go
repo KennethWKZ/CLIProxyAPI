@@ -287,6 +287,14 @@ func isClaudeHaikuModel(model string) bool {
 	return strings.Contains(strings.ToLower(model), "haiku")
 }
 
+// isClaudeHaiku55Model reports Claude Haiku 5.5. Unlike earlier Haiku models it
+// takes effort and adaptive thinking, so checks written for Haiku 4.5 must
+// exclude it.
+func isClaudeHaiku55Model(model string) bool {
+	model = claudeCanonicalModel(model)
+	return model == "claude-haiku-5-5" || strings.HasPrefix(model, "claude-haiku-5-5-") || strings.HasPrefix(model, "claude-haiku-5-5[")
+}
+
 func claudeCanonicalModel(model string) string {
 	model = strings.ToLower(strings.TrimSpace(model))
 	if slash := strings.LastIndexByte(model, '/'); slash >= 0 {
@@ -419,7 +427,7 @@ func claudeRequestSupportsEffort(body []byte, requested map[string]bool) bool {
 			return false
 		}
 		model := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "model").String()))
-		if isClaudeHaikuModel(model) {
+		if isClaudeHaikuModel(model) && !isClaudeHaiku55Model(model) {
 			return false
 		}
 		thinkingType := strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "thinking.type").String()))
@@ -851,6 +859,10 @@ func disableThinkingIfToolChoiceForced(body []byte) []byte {
 //   - thinking active: temperature must be 1, top_p must be >= 0.95, top_k unset
 //   - otherwise: temperature and top_p cannot both be specified
 func normalizeClaudeSamplingForUpstream(body []byte, nativeOwned bool) []byte {
+	if claudeModelRequiresDefaultSampling(gjson.GetBytes(body, "model").String()) {
+		return normalizeClaudeDefaultOnlySampling(body, nativeOwned)
+	}
+
 	thinkingActive := false
 	switch strings.ToLower(strings.TrimSpace(gjson.GetBytes(body, "thinking.type").String())) {
 	case "enabled", "adaptive", "auto":
@@ -879,6 +891,35 @@ func normalizeClaudeSamplingForUpstream(body []byte, nativeOwned bool) []byte {
 	// Anthropic accepts either one but not both; temperature is the knob native
 	// Claude Code actually sends, so top_p is the one that gives way.
 	if gjson.GetBytes(body, "temperature").Exists() && gjson.GetBytes(body, "top_p").Exists() {
+		body, _ = sjson.DeleteBytes(body, "top_p")
+	}
+	return body
+}
+
+// claudeModelRequiresDefaultSampling reports models that return 400 for any
+// non-default sampling value whether or not thinking runs: temperature must be
+// 1, top_p must be 0.99, top_k must be unset, and temperature and top_p cannot
+// both be sent. Thinking is on by default there, so a body without a thinking
+// field still thinks.
+func claudeModelRequiresDefaultSampling(model string) bool {
+	return isClaudeHaiku55Model(model)
+}
+
+// normalizeClaudeDefaultOnlySampling keeps only the defaults those models
+// accept. Translated and cloaked callers lose temperature and top_p as on every
+// other model; a confirmed native client keeps a default it sent, such as the
+// helper's "temperature":1.
+func normalizeClaudeDefaultOnlySampling(body []byte, nativeOwned bool) []byte {
+	body, _ = sjson.DeleteBytes(body, "top_k")
+	if !nativeOwned {
+		body, _ = sjson.DeleteBytes(body, "temperature")
+		body, _ = sjson.DeleteBytes(body, "top_p")
+		return body
+	}
+	if temperature := gjson.GetBytes(body, "temperature"); temperature.Exists() && temperature.Num != 1 {
+		body, _ = sjson.DeleteBytes(body, "temperature")
+	}
+	if topP := gjson.GetBytes(body, "top_p"); topP.Exists() && (topP.Num != 0.99 || gjson.GetBytes(body, "temperature").Exists()) {
 		body, _ = sjson.DeleteBytes(body, "top_p")
 	}
 	return body
