@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -167,16 +168,84 @@ func publishCatalogBytes(data []byte) ([]string, error) {
 	if errValidate := validateModelsCatalog(&parsed); errValidate != nil {
 		return nil, errValidate
 	}
-	applyModelCatalogOverrides(&parsed)
 	old := getModels()
 	if len(parsed.Meta) == 0 && old != nil {
 		parsed.Meta = old.Meta
 	}
+	if kept := mergeEmbeddedOnlyModels(&parsed, embeddedModelsJSON); len(kept) > 0 {
+		log.WithField("models", strings.Join(kept, ",")).Info("model catalog: kept embedded models missing from the fetched catalog")
+	}
+	applyModelCatalogOverrides(&parsed)
 	changed := detectChangedProviders(old, &parsed)
 	modelsCatalogStore.mu.Lock()
 	modelsCatalogStore.data = &parsed
 	modelsCatalogStore.mu.Unlock()
 	return changed, nil
+}
+
+// catalogSections lists every provider section of a catalog by its JSON name.
+func catalogSections(data *staticModelsJSON) []struct {
+	name   string
+	models *[]*ModelInfo
+} {
+	return []struct {
+		name   string
+		models *[]*ModelInfo
+	}{
+		{"claude", &data.Claude},
+		{"gemini", &data.Gemini},
+		{"vertex", &data.Vertex},
+		{"aistudio", &data.AIStudio},
+		{"codex-free", &data.CodexFree},
+		{"codex-team", &data.CodexTeam},
+		{"codex-plus", &data.CodexPlus},
+		{"codex-pro", &data.CodexPro},
+		{"kimi", &data.Kimi},
+		{"antigravity", &data.Antigravity},
+		{"xai", &data.XAI},
+		{"devin", &data.Devin},
+		{"meta", &data.Meta},
+	}
+}
+
+// mergeEmbeddedOnlyModels appends to each section of parsed the embedded models
+// whose id that section lacks, so a fetched catalog cannot drop a model this
+// build ships. Fetched entries win for ids both catalogs list. It returns the
+// kept ids as "section/id".
+func mergeEmbeddedOnlyModels(parsed *staticModelsJSON, embedded []byte) []string {
+	if parsed == nil || len(embedded) == 0 {
+		return nil
+	}
+	// Decode a fresh copy each time so appended entries never alias a catalog
+	// that overrides or later refreshes mutate.
+	var base staticModelsJSON
+	if errUnmarshal := json.Unmarshal(embedded, &base); errUnmarshal != nil {
+		log.WithError(errUnmarshal).Warn("model catalog: embedded catalog unreadable; fetched catalog used as is")
+		return nil
+	}
+	baseSections := catalogSections(&base)
+	var kept []string
+	for i, section := range catalogSections(parsed) {
+		present := make(map[string]struct{}, len(*section.models))
+		for _, model := range *section.models {
+			if model != nil {
+				present[strings.TrimSpace(model.ID)] = struct{}{}
+			}
+		}
+		for _, model := range *baseSections[i].models {
+			if model == nil {
+				continue
+			}
+			id := strings.TrimSpace(model.ID)
+			if _, ok := present[id]; ok || id == "" {
+				continue
+			}
+			present[id] = struct{}{}
+			*section.models = append(*section.models, model)
+			kept = append(kept, section.name+"/"+id)
+		}
+	}
+	return kept
 }
 
 var generalCatalogUpdater = &catalogUpdater{

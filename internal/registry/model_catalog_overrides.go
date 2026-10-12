@@ -8,9 +8,10 @@ import (
 
 // claudeThinkingOverrides pins thinking capabilities for Claude models whose
 // entries in the remote catalog (router-for-me/models) still describe
-// requests the Anthropic API rejects. The remote catalog replaces the embedded
-// models.json at startup and on every refresh, so embedded edits alone do not
-// reach runtime unless --local-model is set.
+// requests the Anthropic API rejects. The remote catalog's entries win over the
+// embedded models.json at startup and on every refresh (embedded models only
+// fill ids the remote lacks), so embedded edits to a shared id do not reach
+// runtime unless --local-model is set.
 //
 // Remove an entry once the remote catalog carries the same values; until then
 // the override is a no-op for the embedded catalog.
