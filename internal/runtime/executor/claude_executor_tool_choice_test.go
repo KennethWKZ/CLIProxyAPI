@@ -52,6 +52,20 @@ func TestNormalizeClaudeToolChoiceFable51(t *testing.T) {
 			wantName: "get_weather",
 		},
 		{
+			// Haiku 5.5 accepts forced tool use; only the response skips thinking.
+			name:     "haiku-5-5 keeps forced any",
+			model:    "claude-haiku-5-5",
+			body:     `{"tool_choice":{"type":"any"}}`,
+			wantType: "any",
+		},
+		{
+			name:     "haiku-5-5 1m variant keeps forced tool",
+			model:    "claude-haiku-5-5[1m]",
+			body:     `{"tool_choice":{"type":"tool","name":"get_weather"}}`,
+			wantType: "tool",
+			wantName: "get_weather",
+		},
+		{
 			name:     "fable-5-1 none untouched",
 			model:    "claude-fable-5-1",
 			body:     `{"tool_choice":{"type":"none"}}`,
