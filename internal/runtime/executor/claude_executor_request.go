@@ -546,7 +546,7 @@ func claudeRequestSupportsEffort(body []byte, requested map[string]bool) bool {
 			return false
 		}
 		model := strings.ToLower(strings.TrimSpace(ojson.GetBytesNoCopy(body, "model").String()))
-		if isClaudeHaikuModel(model) {
+		if isClaudeHaikuModel(model) && !isClaudeHaiku55Model(model) {
 			return false
 		}
 		thinkingType := strings.ToLower(strings.TrimSpace(ojson.GetBytesNoCopy(body, "thinking.type").String()))
@@ -1013,6 +1013,10 @@ func normalizeClaudeSamplingForUpstreamDoc(doc *ojson.Doc, nativeOwned bool) boo
 	if doc == nil {
 		return false
 	}
+	if claudeModelRequiresDefaultSampling(doc.Get("model").String()) {
+		return normalizeClaudeDefaultOnlySamplingDoc(doc, nativeOwned)
+	}
+
 	thinkingActive := false
 	switch strings.ToLower(strings.TrimSpace(doc.Get("thinking.type").String())) {
 	case "enabled", "adaptive", "auto":
@@ -1057,6 +1061,42 @@ func normalizeClaudeSamplingForUpstreamDoc(doc *ojson.Doc, nativeOwned bool) boo
 		if doc.Delete("top_p") == nil {
 			changed = true
 		}
+	}
+	return changed
+}
+
+// claudeModelRequiresDefaultSampling reports models that return 400 for any
+// non-default sampling value whether or not thinking runs: temperature must be
+// 1, top_p must be 0.99, top_k must be unset, and temperature and top_p cannot
+// both be sent. Thinking is on by default there, so a body without a thinking
+// field still thinks.
+func claudeModelRequiresDefaultSampling(model string) bool {
+	return isClaudeHaiku55Model(model)
+}
+
+// normalizeClaudeDefaultOnlySamplingDoc keeps only the defaults those models
+// accept, in place on doc, and reports whether it changed anything. Translated
+// and cloaked callers lose temperature and top_p as on every other model; a
+// confirmed native client keeps a default it sent, such as the helper's
+// "temperature":1.
+func normalizeClaudeDefaultOnlySamplingDoc(doc *ojson.Doc, nativeOwned bool) bool {
+	changed := false
+	drop := func(path string) {
+		if doc.Get(path).Exists() && doc.Delete(path) == nil {
+			changed = true
+		}
+	}
+	drop("top_k")
+	if !nativeOwned {
+		drop("temperature")
+		drop("top_p")
+		return changed
+	}
+	if temperature := doc.Get("temperature"); temperature.Exists() && temperature.Num != 1 {
+		drop("temperature")
+	}
+	if topP := doc.Get("top_p"); topP.Exists() && (topP.Num != 0.99 || doc.Get("temperature").Exists()) {
+		drop("top_p")
 	}
 	return changed
 }
