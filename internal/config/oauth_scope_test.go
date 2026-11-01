@@ -121,3 +121,39 @@ func TestV8MigrationUpdatesScopeAfterSaving(t *testing.T) {
 		})
 	}
 }
+
+func TestV8OAuthBaseURLsMigrateIntoV8Layout(t *testing.T) {
+	raw := []byte("claude-base-url: http://127.0.0.1:18081\nclaude-header-defaults:\n  os: MacOS\ncodex-base-url: http://127.0.0.1:18082\n")
+	migrated, _, err := NormalizeConfigLayout(raw, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = ValidateV8Config(migrated); err != nil {
+		t.Fatalf("migrated base URLs rejected by v8 validation: %v", err)
+	}
+	var doc yaml.Node
+	if err = yaml.Unmarshal(migrated, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for path, want := range map[string]string{
+		"upstream.claude.base-url":           "http://127.0.0.1:18081",
+		"upstream.claude.header-defaults.os": "MacOS",
+		"oauth.providers.codex.base-url":     "http://127.0.0.1:18082",
+	} {
+		if node := yamlPath(doc.Content[0], path); node == nil || node.Value != want {
+			t.Fatalf("%s missing after migration:\n%s", path, migrated)
+		}
+	}
+	cfg, err := ParseConfigBytes(migrated)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ClaudeBaseURL != "http://127.0.0.1:18081" || cfg.CodexBaseURL != "http://127.0.0.1:18082" {
+		t.Fatalf("v8 base URLs not loaded: claude=%q codex=%q", cfg.ClaudeBaseURL, cfg.CodexBaseURL)
+	}
+	// upstream.claude is shared, so the Claude executor, not ForAPIKey, keeps
+	// the global base URL off API-key auths (see claudeAuthInheritsBaseURL).
+	if api := cfg.ForAPIKey(); api.CodexBaseURL != "" {
+		t.Fatal("API-key view inherited the OAuth-only Codex base URL")
+	}
+}

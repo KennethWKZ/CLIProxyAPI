@@ -885,7 +885,7 @@ func (e *CodexWebsocketsExecutor) prepareCodexWebsocketStream(ctx context.Contex
 	if errExpand != nil {
 		return nil, statusErr{code: http.StatusBadRequest, msg: errExpand.Error()}
 	}
-	apiKey, baseURL := codexCredsForRequest(ctx, auth, opts.Headers)
+	apiKey, baseURL := codexCredsWithConfig(ctx, e.cfg, auth, opts.Headers)
 	if errSIWC := ensureCodexSIWCCredentialsForRequest(ctx, auth, apiKey, opts.Headers); errSIWC != nil {
 		return nil, errSIWC
 	}
