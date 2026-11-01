@@ -636,7 +636,7 @@ func resolveClaudeKeyConfig(cfg *config.Config, auth *cliproxyauth.Auth) *config
 	for i := range cfg.ClaudeKey {
 		entry := &cfg.ClaudeKey[i]
 		cfgKey := strings.TrimSpace(entry.APIKey)
-		cfgBase := strings.TrimSpace(entry.BaseURL)
+		cfgBase := normalizeClaudeBaseURL(entry.BaseURL)
 		if !strings.EqualFold(cfgKey, apiKey) {
 			continue
 		}
@@ -647,6 +647,12 @@ func resolveClaudeKeyConfig(cfg *config.Config, auth *cliproxyauth.Auth) *config
 	}
 
 	return nil
+}
+
+// normalizeClaudeBaseURL trims surrounding whitespace and any trailing slash so
+// configured and resolved base URLs compare equal.
+func normalizeClaudeBaseURL(baseURL string) string {
+	return strings.TrimRight(strings.TrimSpace(baseURL), "/")
 }
 
 // resolveClaudeKeyCloakConfig finds the matching ClaudeKey config and returns its CloakConfig.

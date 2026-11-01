@@ -759,6 +759,7 @@ func (h *Handler) buildAuthFromFileData(path string, data []byte) (*coreauth.Aut
 			auth.Runtime = existing.Runtime
 		}
 	}
+	coreauth.ApplyBaseURLFromMetadata(auth)
 	coreauth.ApplyCustomHeadersFromMetadata(auth)
 	return auth, nil
 }
