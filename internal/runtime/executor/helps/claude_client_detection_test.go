@@ -2,6 +2,7 @@ package helps
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -705,4 +706,104 @@ func TestDetectClaudeCodeRequestAcceptsBackgroundSessionXApp(t *testing.T) {
 			}
 		}
 	})
+}
+
+// Claude Code CLI Haiku 5.5 title helper, as captured from 2.1.319 behind the
+// CCS tool-sanitization proxy and replayed at the 2.1.321 fingerprint baseline
+// (older CLI versions no longer confirm): CCS forces Accept-Encoding to
+// identity, and a bearer-token CLI session sends no prompt-caching-scope beta
+// on helpers.
+func TestDetectClaudeCodeRequestRecognizesCLIHaiku55HelperBehindRelay(t *testing.T) {
+	encodedUserID, _ := json.Marshal(validClaudeCodeMetadataUserID)
+	cliBetas := "interleaved-thinking-2025-05-14,redact-thinking-2026-02-12,context-management-2025-06-27,per-turn-control-2026-07-01,mid-conversation-tool-changes-2026-07-01,inline-tools-2026-09-15,advisor-tool-2026-03-01,thinking-token-count-2026-05-13,effort-2025-11-24,structured-outputs-2025-12-15"
+	payload := []byte(`{"max_tokens":1024,"messages":[{"role":"user","content":[{"type":"text","text":"name session"}]}],"metadata":{"user_id":` + string(encodedUserID) + `},"model":"claude-haiku-5-5","output_config":{"effort":"medium","format":{"type":"json_schema","schema":{"type":"object","properties":{"title":{"type":"string"}},"required":["title"],"additionalProperties":false}}},"stream":true,"system":[{"type":"text","text":"x-anthropic-billing-header: cc_version=2.1.321.0ef; cc_entrypoint=cli;"},{"type":"text","text":"You are Claude Code, Anthropic's official CLI for Claude."},{"type":"text","text":"You are naming a coding session so the user can pick it out of a long list of sessions."}],"tools":[]}`)
+
+	newHeaders := func() http.Header {
+		headers := measuredClaudeCodeHelperHeaders(cliBetas)
+		headers.Set("User-Agent", "claude-cli/2.1.321 (external, cli)")
+		headers.Set("X-Stainless-Package-Version", "0.128.0")
+		headers.Set("X-Stainless-Runtime-Version", "v26.12.1")
+		headers.Set("Accept-Encoding", "identity")
+		headers.Del("X-Client-Request-Id")
+		return headers
+	}
+
+	pluginPayload := []byte(strings.Replace(string(payload), "You are Claude Code, Anthropic's official CLI for Claude.", "You audit an AI assistant's promises.", 1))
+
+	for _, tc := range []struct {
+		name    string
+		mutate  func(http.Header)
+		payload []byte
+		confirm bool
+	}{
+		{name: "relayed identity encoding without caching-scope beta", confirm: true},
+		{name: "direct client compression profile", mutate: func(h http.Header) { h.Set("Accept-Encoding", "gzip, deflate, br, zstd") }, confirm: true},
+		{name: "with caching-scope beta", mutate: func(h http.Header) {
+			h.Set("Anthropic-Beta", h.Get("Anthropic-Beta")+",prompt-caching-scope-2026-01-05")
+		}, confirm: true},
+		{name: "unmeasured compression profile", mutate: func(h http.Header) { h.Set("Accept-Encoding", "gzip") }},
+		{name: "missing thinking-token-count beta", mutate: func(h http.Header) {
+			h.Set("Anthropic-Beta", strings.Replace(h.Get("Anthropic-Beta"), "thinking-token-count-2026-05-13,", "", 1))
+		}},
+		{name: "mismatched session header", mutate: func(h http.Header) {
+			h.Set("X-Claude-Code-Session-Id", "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee")
+		}},
+		// identity relaxes only the transport check: a direct client that sends
+		// identity is still rejected when anything else in the helper profile is off.
+		{name: "identity with a custom system prompt", payload: pluginPayload},
+		{name: "identity without stainless runtime version", mutate: func(h http.Header) { h.Del("X-Stainless-Runtime-Version") }},
+		{name: "identity with stainless async", mutate: func(h http.Header) { h.Set("X-Stainless-Async", "async:asyncio") }},
+		{name: "identity with python stainless lang", mutate: func(h http.Header) { h.Set("X-Stainless-Lang", "python") }},
+		{name: "identity with an invalid client request id", mutate: func(h http.Header) { h.Set("X-Client-Request-Id", "not-a-uuid") }},
+		{name: "identity spelled in another case", mutate: func(h http.Header) { h.Set("Accept-Encoding", "Identity") }},
+		{name: "identity mixed with gzip", mutate: func(h http.Header) { h.Set("Accept-Encoding", "identity, gzip") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			headers := newHeaders()
+			if tc.mutate != nil {
+				tc.mutate(headers)
+			}
+			body := payload
+			if tc.payload != nil {
+				body = tc.payload
+			}
+			detection := DetectClaudeCodeRequest(headers, body, false, nil)
+			if detection.Confirmed != tc.confirm || detection.HelperProfile != tc.confirm {
+				t.Fatalf("detection = %#v, want confirmed=%v helper=%v", detection, tc.confirm, tc.confirm)
+			}
+			if tc.confirm && (detection.Entrypoint != "cli" || detection.Subclient != "claude-code-cli") {
+				t.Fatalf("detection identity = %#v, want cli / claude-code-cli", detection)
+			}
+		})
+	}
+}
+
+// The general measured helper profile (Haiku 4.5 era) shares the Accept-Encoding
+// check with the Haiku 5.5 profile: identity from a relay is accepted, any other
+// value outside the measured compression set is not.
+func TestDetectClaudeCodeRequestMeasuredHelperAcceptEncoding(t *testing.T) {
+	for _, tc := range []struct {
+		encoding string
+		confirm  bool
+	}{
+		{encoding: "gzip, deflate, br, zstd", confirm: true},
+		{encoding: "identity", confirm: true},
+		{encoding: "Identity"},
+		{encoding: "gzip"},
+		{encoding: "identity, gzip"},
+		{encoding: ""},
+	} {
+		t.Run(fmt.Sprintf("%q", tc.encoding), func(t *testing.T) {
+			headers := measuredClaudeCodeHelperHeaders(claudeCodeHelperBetaProfile(true))
+			if tc.encoding == "" {
+				headers.Del("Accept-Encoding")
+			} else {
+				headers.Set("Accept-Encoding", tc.encoding)
+			}
+			detection := DetectClaudeCodeRequest(headers, measuredClaudeCodeMinimalHelperPayload(), false)
+			if detection.Confirmed != tc.confirm || detection.HelperProfile != tc.confirm {
+				t.Fatalf("detection = %#v, want confirmed=%v helper=%v", detection, tc.confirm, tc.confirm)
+			}
+		})
+	}
 }
