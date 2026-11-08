@@ -300,7 +300,7 @@ func measuredClaudeCodeHaiku55HelperHeadersMatch(headers http.Header, cfg *confi
 	if headerValue(headers, "X-Stainless-Async") != "" {
 		return false
 	}
-	if headerValue(headers, "Accept-Encoding") != "gzip, deflate, br, zstd" {
+	if !measuredClaudeCodeHelperAcceptEncoding(headerValue(headers, "Accept-Encoding")) {
 		return false
 	}
 	if requestID := headerValue(headers, "X-Client-Request-Id"); requestID != "" {
@@ -308,11 +308,20 @@ func measuredClaudeCodeHaiku55HelperHeadersMatch(headers http.Header, cfg *confi
 			return false
 		}
 	}
+	// prompt-caching-scope-2026-01-05 is not required: Claude Code 2.1.319 CLI
+	// helpers on a bearer-token session (how CCS launches Claude Code) omit it.
 	betaHeader := normalizedClaudeBetaHeader(headers)
 	return strings.Contains(betaHeader, "interleaved-thinking-2025-05-14") &&
 		strings.Contains(betaHeader, "thinking-token-count-2026-05-13") &&
-		strings.Contains(betaHeader, "context-management-2025-06-27") &&
-		strings.Contains(betaHeader, "prompt-caching-scope-2026-01-05")
+		strings.Contains(betaHeader, "context-management-2025-06-27")
+}
+
+// measuredClaudeCodeHelperAcceptEncoding accepts the compression profile Claude
+// Code sends, plus "identity": a relay in front of CPA that reads response
+// bodies (the CCS tool-sanitization proxy) replaces Accept-Encoding with
+// identity, which changes only the transport, not the client.
+func measuredClaudeCodeHelperAcceptEncoding(value string) bool {
+	return value == "gzip, deflate, br, zstd" || value == "identity"
 }
 
 func measuredClaudeCodeHaiku55HelperSessionMatches(headers http.Header, payload []byte) bool {
@@ -485,7 +494,7 @@ func measuredClaudeCodeHelperHeadersMatch(headers http.Header, cfg *config.Confi
 	if headerValue(headers, "X-Stainless-Async") != "" {
 		return false
 	}
-	if headerValue(headers, "Accept-Encoding") != "gzip, deflate, br, zstd" {
+	if !measuredClaudeCodeHelperAcceptEncoding(headerValue(headers, "Accept-Encoding")) {
 		return false
 	}
 	if requestID := headerValue(headers, "X-Client-Request-Id"); requestID != "" {
