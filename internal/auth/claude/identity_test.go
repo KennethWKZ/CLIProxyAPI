@@ -194,6 +194,22 @@ func TestSelectDeviceIDUsesOneDeviceAcrossSessions(t *testing.T) {
 	}
 }
 
+func TestSnapshotMetadata(t *testing.T) {
+	metadata := map[string]any{"email": "user@example.com", "on": true}
+	snapshot := SnapshotMetadata(&metadata)
+	if !reflect.DeepEqual(snapshot, metadata) {
+		t.Fatalf("SnapshotMetadata() = %#v, want %#v", snapshot, metadata)
+	}
+	snapshot["email"] = "changed@example.com"
+	if metadata["email"] != "user@example.com" {
+		t.Fatal("writing to the snapshot changed the live metadata")
+	}
+	var nilMap map[string]any
+	if SnapshotMetadata(&nilMap) != nil || SnapshotMetadata(nil) != nil {
+		t.Fatal("SnapshotMetadata on nil metadata, want nil")
+	}
+}
+
 func TestReadMetadataBool(t *testing.T) {
 	metadata := map[string]any{"on": true, "off": false, "text": "true"}
 	for key, want := range map[string]bool{"on": true, "off": false, "text": false, "missing": false} {
